@@ -90,4 +90,13 @@ public class NbpService {
         private String code;
         private Double mid;
     }
+
+    public java.util.List<pl.edu.projekt.core.dto.RateHistoryDto> getHistory(String currencyCode) {
+        Currency currency = currencyRepository.findByCode(currencyCode)
+                .orElseThrow(() -> new RuntimeException("Nie znaleziono waluty o kodzie: " + currencyCode));
+
+        return currency.getRates().stream()
+                .map(rate -> new pl.edu.projekt.core.dto.RateHistoryDto(rate.getDate(), rate.getMid()))
+                .collect(java.util.stream.Collectors.toList());
+    }
 }

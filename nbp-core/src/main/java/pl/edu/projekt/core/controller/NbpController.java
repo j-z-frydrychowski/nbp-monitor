@@ -17,12 +17,25 @@ public class NbpController {
     }
 
     /**
-     * Endpoint do ręcznego wymuszenia pobrania danych.
-     * Użycie: GET http://localhost:8080/nbp/load/A
+     * Endpoint do pobierania danych.
+     * Przykłady:
+     * GET http://localhost:8080/nbp/load/A  -> Pobierze tabelę A (waluty główne)
+     * GET http://localhost:8080/nbp/load/B  -> Pobierze tabelę B (waluty egzotyczne)
      */
     @GetMapping("/load/{table}")
     public String loadRates(@PathVariable String table) {
+        // Teraz przekazujemy zmienną 'table' do serwisu!
         nbpService.fetchAndSaveRates(table);
-        return "Pomyślnie pobrano i zapisano dane dla tabeli: " + table;
+
+        return "Wysłano żądanie pobrania dla tabeli: " + table;
+    }
+    /**
+     * Endpoint do pobierania historii kursu dla danej waluty.
+     * Przykład:
+     * GET http://localhost:8080/nbp/history/USD  -> Pobierze historię kursu dla dolara amerykańskiego
+     */
+    @GetMapping("/history/{code}")
+    public java.util.List<pl.edu.projekt.core.dto.RateHistoryDto> getCurrencyHistory(@PathVariable String code) {
+        return nbpService.getHistory(code);
     }
 }
