@@ -29,15 +29,21 @@ public class NbpService {
     }
 
     @Scheduled(fixedRate = 60000)
-    public void fetchAndSaveRates() {
-        String url = "http://api.nbp.pl/api/exchangerates/tables/A?format=json";
+    public void runAutoFetch() {
+        fetchAndSaveRates("A");
+    }
+
+    public void fetchAndSaveRates(String tableType) {
+        // Budujemy URL dynamicznie, wstawiając parametr tableType
+        String url = "http://api.nbp.pl/api/exchangerates/tables/" + tableType + "?format=json";
 
         try {
-            NbpTableDto[] responese = restTemplate.getForObject(url, NbpTableDto[].class);
+            NbpTableDto[] response = restTemplate.getForObject(url, NbpTableDto[].class);
 
-            if (responese != null & responese.length > 0) {
-                NbpTableDto table = responese[0];
+            if (response != null && response.length > 0) {
+                NbpTableDto table = response[0];
                 LocalDate rateDate = LocalDate.parse(table.effectiveDate);
+
                 for (NbpRateDto dto : table.rates) {
                     Currency currency = currencyRepository.findByCode(dto.code)
                             .orElseGet(() -> {
@@ -52,13 +58,13 @@ public class NbpService {
                     rate.setMid(dto.mid);
                     rate.setDate(rateDate);
                     rateRepository.save(rate);
-                    }
-                saveLog("SUCCESS", "Fetched and saved rates for date: " + rateDate);
-                System.out.println("Fetched and saved rates for date: " + rateDate);
                 }
-            } catch (Exception e) {
-            saveLog("ERROR", "Failed to fetch rates: " + e.getMessage());
-            System.err.println("Failed to fetch rates: " + e.getMessage());
+                saveLog("SUCCESS", "Pobrano dane dla tabeli " + tableType + " z dnia: " + rateDate);
+                System.out.println("Sukces: Pobrano tabelę " + tableType);
+            }
+        } catch (Exception e) {
+            saveLog("ERROR", "Błąd pobierania tabeli " + tableType + ": " + e.getMessage());
+            System.err.println("Błąd: " + e.getMessage());
         }
     }
 

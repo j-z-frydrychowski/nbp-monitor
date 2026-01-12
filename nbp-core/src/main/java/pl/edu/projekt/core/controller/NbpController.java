@@ -22,7 +22,7 @@ public class NbpController {
      */
     @GetMapping("/load/{table}")
     public String loadRates(@PathVariable String table) {
-        nbpService.fetchAndSaveRates();
-        return "Pomyślnie pobrano i zapisano dane dla tabeli: ";
+        nbpService.fetchAndSaveRates(table);
+        return "Pomyślnie pobrano i zapisano dane dla tabeli: " + table;
     }
 }
