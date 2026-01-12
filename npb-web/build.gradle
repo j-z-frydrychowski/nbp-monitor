@@ -1,0 +1,7 @@
+dependencies {
+    // Zależność od naszego modułu CORE (dostęp do bazy i logiki)
+    implementation project(':nbp-core')
+
+    // Wystawianie REST API
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+}

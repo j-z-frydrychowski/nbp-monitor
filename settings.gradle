@@ -1,0 +1,4 @@
+rootProject.name = 'nbp-monitor'
+
+include 'nbp-core'
+include 'nbp-web'
