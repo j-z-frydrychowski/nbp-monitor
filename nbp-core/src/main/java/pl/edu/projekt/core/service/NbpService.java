@@ -1,32 +1,30 @@
 package pl.edu.projekt.core.service;
 
+import lombok.AllArgsConstructor;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
-import pl.edu.projekt.core.entity.Currency;
-import pl.edu.projekt.core.entity.FetchLog;
-import pl.edu.projekt.core.entity.Rate;
-import pl.edu.projekt.core.repository.CurrencyRepository;
-import pl.edu.projekt.core.repository.FetchLogRepository;
-import pl.edu.projekt.core.repository.RateRepository;
+import pl.edu.projekt.core.dto.RateHistoryDto;
+import pl.edu.projekt.core.dto.UserAlertDto;
+import pl.edu.projekt.core.entity.*;
+import pl.edu.projekt.core.repository.*;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import static java.util.stream.Collectors.toList;
+
 @Service
+@AllArgsConstructor
 public class NbpService {
 
     private final CurrencyRepository currencyRepository;
     private final RateRepository rateRepository;
     private final FetchLogRepository fetchLogRepository;
     private final RestTemplate restTemplate = new RestTemplate();
-
-    public NbpService(CurrencyRepository currencyRepository, RateRepository rateRepository, FetchLogRepository fetchLogRepository) {
-        this.currencyRepository = currencyRepository;
-        this.rateRepository = rateRepository;
-        this.fetchLogRepository = fetchLogRepository;
-    }
+    private final AppUserRepository appUserRepository;
+    private final UserAlertRepository userAlertRepository;
 
     @Scheduled(fixedRate = 60000)
     public void runAutoFetch() {
@@ -91,12 +89,28 @@ public class NbpService {
         private Double mid;
     }
 
-    public java.util.List<pl.edu.projekt.core.dto.RateHistoryDto> getHistory(String currencyCode) {
+    public java.util.List<RateHistoryDto> getHistory(String currencyCode) {
         Currency currency = currencyRepository.findByCode(currencyCode)
                 .orElseThrow(() -> new RuntimeException("Nie znaleziono waluty o kodzie: " + currencyCode));
 
         return currency.getRates().stream()
-                .map(rate -> new pl.edu.projekt.core.dto.RateHistoryDto(rate.getDate(), rate.getMid()))
-                .collect(java.util.stream.Collectors.toList());
+                .map(rate -> new RateHistoryDto(rate.getDate(), rate.getMid()))
+                .collect(toList());
+    }
+
+    public void addAlert(UserAlertDto dto) {
+
+        AppUser user = appUserRepository.findAll().stream().findFirst()
+                .orElseThrow(() -> new RuntimeException("Brak użytkowników w bazie!"));
+
+        // 2. Tworzymy encję Alertu
+        UserAlert alert = new pl.edu.projekt.core.entity.UserAlert();
+        alert.setCurrencyCode(dto.getCurrencyCode().toUpperCase()); // np. usd -> USD
+        alert.setThreshold(dto.getThreshold());
+        alert.setUser(user);
+
+
+        userAlertRepository.save(alert);
+        System.out.println("Dodano alert dla waluty " + dto.getCurrencyCode() + " powyżej " + dto.getThreshold());
     }
 }

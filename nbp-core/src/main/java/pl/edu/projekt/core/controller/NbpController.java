@@ -38,4 +38,10 @@ public class NbpController {
     public java.util.List<pl.edu.projekt.core.dto.RateHistoryDto> getCurrencyHistory(@PathVariable String code) {
         return nbpService.getHistory(code);
     }
+
+    @org.springframework.web.bind.annotation.PostMapping("/alert")
+    public String addAlert(@org.springframework.web.bind.annotation.RequestBody pl.edu.projekt.core.dto.UserAlertDto dto) {
+        nbpService.addAlert(dto);
+        return "Dodano alert dla waluty: " + dto.getCurrencyCode();
+    }
 }
