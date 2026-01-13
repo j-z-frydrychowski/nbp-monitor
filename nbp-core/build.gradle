@@ -3,6 +3,9 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     runtimeOnly 'com.h2database:h2'
 
-    // Potrzebne do pobierania danych z Internetu (RestTemplate)
-    implementation 'org.springframework.boot:spring-boot-starter-web'
+    // Zmieniamy 'starter-web' (który ma Tomcat) na sam 'spring-web' (do RestTemplate)
+    implementation 'org.springframework:spring-web'
+
+    // Potrzebne do JSON (jeśli używasz wewnątrz serwisu)
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
 }

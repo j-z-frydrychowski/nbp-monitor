@@ -1,30 +1,35 @@
 package pl.edu.projekt.core.service;
 
-import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import pl.edu.projekt.core.dto.RateHistoryDto;
 import pl.edu.projekt.core.dto.UserAlertDto;
-import pl.edu.projekt.core.entity.*;
+import pl.edu.projekt.core.entity.AppUser;
+import pl.edu.projekt.core.entity.Currency;
+import pl.edu.projekt.core.entity.FetchLog;
+import pl.edu.projekt.core.entity.Rate;
+import pl.edu.projekt.core.entity.UserAlert;
 import pl.edu.projekt.core.repository.*;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.List;
-
-import static java.util.stream.Collectors.toList;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
-@AllArgsConstructor
+@Slf4j
+@RequiredArgsConstructor
 public class NbpService {
 
     private final CurrencyRepository currencyRepository;
     private final RateRepository rateRepository;
     private final FetchLogRepository fetchLogRepository;
-    private final RestTemplate restTemplate = new RestTemplate();
-    private final AppUserRepository appUserRepository;
     private final UserAlertRepository userAlertRepository;
+    private final AppUserRepository appUserRepository;
+    private final RestTemplate restTemplate;
 
     @Scheduled(fixedRate = 60000)
     public void runAutoFetch() {
@@ -32,7 +37,6 @@ public class NbpService {
     }
 
     public void fetchAndSaveRates(String tableType) {
-        // Budujemy URL dynamicznie, wstawiając parametr tableType
         String url = "http://api.nbp.pl/api/exchangerates/tables/" + tableType + "?format=json";
 
         try {
@@ -41,6 +45,8 @@ public class NbpService {
             if (response != null && response.length > 0) {
                 NbpTableDto table = response[0];
                 LocalDate rateDate = LocalDate.parse(table.effectiveDate);
+
+                List<Rate> ratesToSave = new ArrayList<>();
 
                 for (NbpRateDto dto : table.rates) {
                     Currency currency = currencyRepository.findByCode(dto.code)
@@ -55,25 +61,80 @@ public class NbpService {
                     rate.setCurrency(currency);
                     rate.setMid(dto.mid);
                     rate.setDate(rateDate);
-                    rateRepository.save(rate);
+
+                    ratesToSave.add(rate);
                 }
+
+                rateRepository.saveAll(ratesToSave);
+
                 saveLog("SUCCESS", "Pobrano dane dla tabeli " + tableType + " z dnia: " + rateDate);
-                System.out.println("Sukces: Pobrano tabelę " + tableType);
+                log.info("Sukces: Pobrano i zapisano {} kursów dla tabeli {}", ratesToSave.size(), tableType);
 
                 checkAlerts();
             }
         } catch (Exception e) {
             saveLog("ERROR", "Błąd pobierania tabeli " + tableType + ": " + e.getMessage());
-            System.err.println("Błąd: " + e.getMessage());
+            log.error("Błąd pobierania danych: ", e);
         }
     }
 
+
+    private void checkAlerts() {
+        List<UserAlert> alerts = userAlertRepository.findAll();
+        if (alerts.isEmpty()) return;
+
+        Set<String> currenciesInAlerts = alerts.stream()
+                .map(UserAlert::getCurrencyCode)
+                .collect(Collectors.toSet());
+
+        List<Rate> latestRatesList = rateRepository.findLatestRatesForCurrencies(currenciesInAlerts);
+
+        Map<String, Double> ratesMap = latestRatesList.stream()
+                .collect(Collectors.toMap(
+                        rate -> rate.getCurrency().getCode(),
+                        Rate::getMid
+                ));
+
+        log.info("Sprawdzanie {} alertów dla {} walut...", alerts.size(), currenciesInAlerts.size());
+
+        for (UserAlert alert : alerts) {
+            Double currentRate = ratesMap.get(alert.getCurrencyCode());
+
+            if (currentRate != null && currentRate > alert.getThreshold()) {
+                log.warn("!!! POWIADOMIENIE !!! Użytkownik: {} | Waluta: {} | Kurs: {} > Próg: {}",
+                        alert.getUser().getEmail(), alert.getCurrencyCode(), currentRate, alert.getThreshold());
+            }
+        }
+    }
+
+    public List<RateHistoryDto> getHistory(String currencyCode) {
+        Currency currency = currencyRepository.findByCode(currencyCode)
+                .orElseThrow(() -> new RuntimeException("Nie znaleziono waluty: " + currencyCode));
+
+        return currency.getRates().stream()
+                .map(rate -> new RateHistoryDto(rate.getDate(), rate.getMid()))
+                .collect(Collectors.toList());
+    }
+
+    public void addAlert(UserAlertDto dto) {
+        AppUser user = appUserRepository.findById(dto.getUserId())
+                .orElseThrow(() -> new RuntimeException("Nie znaleziono użytkownika o ID: " + dto.getUserId()));
+
+        UserAlert alert = new UserAlert();
+        alert.setCurrencyCode(dto.getCurrencyCode().toUpperCase());
+        alert.setThreshold(dto.getThreshold());
+        alert.setUser(user);
+
+        userAlertRepository.save(alert);
+        log.info("Dodano alert dla użytkownika {} na walutę {}", user.getEmail(), dto.getCurrencyCode());
+    }
+
     private void saveLog(String status, String message) {
-        FetchLog log = new FetchLog();
-        log.setTimestamp(LocalDateTime.now());
-        log.setStatus(status);
-        log.setMessage(message);
-        fetchLogRepository.save(log);
+        FetchLog logEntry = new FetchLog();
+        logEntry.setTimestamp(LocalDateTime.now());
+        logEntry.setStatus(status);
+        logEntry.setMessage(message);
+        fetchLogRepository.save(logEntry);
     }
 
     @lombok.Data
@@ -89,52 +150,5 @@ public class NbpService {
         private String currency;
         private String code;
         private Double mid;
-    }
-
-    public java.util.List<RateHistoryDto> getHistory(String currencyCode) {
-        Currency currency = currencyRepository.findByCode(currencyCode)
-                .orElseThrow(() -> new RuntimeException("Nie znaleziono waluty o kodzie: " + currencyCode));
-
-        return currency.getRates().stream()
-                .map(rate -> new RateHistoryDto(rate.getDate(), rate.getMid()))
-                .collect(toList());
-    }
-
-    public void addAlert(UserAlertDto dto) {
-
-        AppUser user = appUserRepository.findAll().stream().findFirst()
-                .orElseThrow(() -> new RuntimeException("Brak użytkowników w bazie!"));
-
-        // 2. Tworzymy encję Alertu
-        UserAlert alert = new pl.edu.projekt.core.entity.UserAlert();
-        alert.setCurrencyCode(dto.getCurrencyCode().toUpperCase()); // np. usd -> USD
-        alert.setThreshold(dto.getThreshold());
-        alert.setUser(user);
-
-
-        userAlertRepository.save(alert);
-        System.out.println("Dodano alert dla waluty " + dto.getCurrencyCode() + " powyżej " + dto.getThreshold());
-    }
-
-    private void checkAlerts(){
-        List<UserAlert> alerts = userAlertRepository.findAll();
-
-        if (alerts.isEmpty()) {
-            return;
-        }
-
-        for (UserAlert alert : alerts) {
-            currencyRepository.findByCode(alert.getCurrencyCode()).ifPresent(currency ->{
-                rateRepository.findTopByCurrencyOrderByDateDesc(currency).ifPresent(rate -> {
-                    if (rate.getMid() > alert.getThreshold()) {
-                       System.out.println("ATTENTION!\n Currency " + alert.getCurrencyCode() +
-                               " exceeded threshold of " + alert.getThreshold() +
-                               ". Current rate: " + rate.getMid() +
-                               ". Notify user: " + alert.getUser().getEmail());
-
-                    }
-                });
-            });
-        }
     }
 }
