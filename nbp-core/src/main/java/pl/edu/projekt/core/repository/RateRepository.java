@@ -12,8 +12,7 @@ import java.util.Set;
 
 public interface RateRepository extends JpaRepository<Rate, Long> {
 
-    @Query("SELECT r FROM Rate r WHERE r.date = (SELECT MAX(r2.date) FROM Rate r2 WHERE r2.currency = r.currency) AND r.currency.code IN :currencyCodes")
+    @Query("SELECT r FROM Rate r WHERE r.date = (SELECT MAX(r2.date) FROM Rate r2 WHERE r2.currency.id = r.currency.id) AND r.currency.code IN :currencyCodes")
     List<Rate> findLatestRatesForCurrencies(@Param("currencyCodes") Set<String> currencyCodes);
-
 
 }

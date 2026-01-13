@@ -100,20 +100,29 @@ public class NbpService {
 
         List<Rate> latestRatesList = rateRepository.findLatestRatesForCurrencies(currenciesInAlerts);
 
+        log.info("System alertów: Znaleziono {} alertów dla walut: {}. Pobrano {} aktualnych kursów z bazy.",
+                alerts.size(), currenciesInAlerts, latestRatesList.size());
+
         Map<String, Double> ratesMap = latestRatesList.stream()
                 .collect(Collectors.toMap(
                         rate -> rate.getCurrency().getCode(),
-                        Rate::getMid,(existing, replacement) -> existing
+                        Rate::getMid,
+                        (existing, replacement) -> existing
                 ));
-
-        log.info("Sprawdzanie {} alertów dla {} walut...", alerts.size(), currenciesInAlerts.size());
 
         for (UserAlert alert : alerts) {
             Double currentRate = ratesMap.get(alert.getCurrencyCode());
 
-            if (currentRate != null && currentRate > alert.getThreshold()) {
-                log.warn("!!! POWIADOMIENIE !!! Użytkownik: {} | Waluta: {} | Kurs: {} > Próg: {}",
-                        alert.getUser().getEmail(), alert.getCurrencyCode(), currentRate, alert.getThreshold());
+            if (currentRate == null) {
+                log.warn("Brak aktualnego kursu dla waluty {} w bazie danych! Pominęto alert.", alert.getCurrencyCode());
+            } else {
+                log.info("Weryfikacja alertu dla {}: Kurs {} vs Próg {}. Wynik: {}",
+                        alert.getCurrencyCode(), currentRate, alert.getThreshold(), (currentRate > alert.getThreshold()));
+
+                if (currentRate > alert.getThreshold()) {
+                    log.warn("!!! POWIADOMIENIE !!! Użytkownik: {} | Waluta: {} | Kurs: {} > Próg: {}",
+                            alert.getUser().getEmail(), alert.getCurrencyCode(), currentRate, alert.getThreshold());
+                }
             }
         }
     }
