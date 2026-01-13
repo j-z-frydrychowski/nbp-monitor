@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <title>NBP Monitor SPA</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        body { background-color: #f8f9fa; padding-top: 50px; }
+        .card { margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body>
+
+<div id="app" class="container">
+
+    <div class="text-center mb-5">
+        <h1>NBP Monitor</h1>
+        <p class="text-muted">Prosty panel zarządzania walutami</p>
+    </div>
+
+    <div v-if="!isLoggedIn" class="row justify-content-center">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Zaloguj się</h5>
+                    <div class="mb-3">
+                        <label>Email</label>
+                        <input v-model="loginForm.email" type="email" class="form-control" placeholder="jan@test.pl">
+                    </div>
+                    <div class="mb-3">
+                        <label>Hasło</label>
+                        <input v-model="loginForm.password" type="password" class="form-control" placeholder="user123">
+                    </div>
+                    <button @click="login" class="btn btn-primary w-100">Wejdź</button>
+                    <div v-if="errorMessage" class="alert alert-danger mt-2">{{ errorMessage }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div v-else>
+        <div class="d-flex justify-content-between mb-4">
+            <h4>Witaj, {{ loginForm.email }}!</h4>
+            <button @click="logout" class="btn btn-outline-danger">Wyloguj</button>
+        </div>
+
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">Akcje</div>
+                    <div class="card-body">
+                        <p>Wymuś pobranie kursów z NBP:</p>
+                        <button @click="loadTable('A')" class="btn btn-success me-2">Pobierz Tabelę A</button>
+                        <button @click="loadTable('B')" class="btn btn-info text-white">Pobierz Tabelę B</button>
+                        <hr>
+                        <div v-if="actionMessage" class="alert alert-success">{{ actionMessage }}</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header bg-warning">Dodaj Alert</div>
+                    <div class="card-body">
+                        <div class="input-group mb-2">
+                            <span class="input-group-text">Waluta</span>
+                            <input v-model="alertForm.currency" type="text" class="form-control" placeholder="EUR">
+                        </div>
+                        <div class="input-group mb-2">
+                            <span class="input-group-text">Próg</span>
+                            <input v-model="alertForm.threshold" type="number" class="form-control" placeholder="4.50">
+                        </div>
+                        <button @click="addAlert" class="btn btn-warning w-100">Ustaw Alert</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-secondary text-white">Sprawdź historię</div>
+                    <div class="card-body">
+                        <div class="input-group mb-3">
+                            <input v-model="historyCurrency" type="text" class="form-control" placeholder="Wpisz kod np. USD">
+                            <button @click="fetchHistory" class="btn btn-secondary">Szukaj</button>
+                        </div>
+
+                        <table v-if="historyData.length > 0" class="table table-striped">
+                            <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Kurs Średni</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr v-for="rate in historyData" :key="rate.date">
+                                <td>{{ rate.date }}</td>
+                                <td>{{ rate.mid }}</td>
+                            </tr>
+                            </tbody>
+                        </table>
+                        <p v-else class="text-muted text-center">Brak danych do wyświetlenia</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    const { createApp } = Vue;
+
+    createApp({
+        data() {
+            return {
+                isLoggedIn: false,
+                authHeader: '', // Przechowuje "Basic base64..."
+                errorMessage: '',
+                actionMessage: '',
+
+                loginForm: { email: 'jan@test.pl', password: 'user123' },
+                alertForm: { currency: '', threshold: null },
+                historyCurrency: '',
+                historyData: []
+            }
+        },
+        methods: {
+            // Logowanie to po prostu zakodowanie hasła i sprawdzenie czy działa
+            async login() {
+                // Tworzymy nagłówek Basic Auth
+                const credentials = btoa(this.loginForm.email + ":" + this.loginForm.password);
+                this.authHeader = "Basic " + credentials;
+
+                // Próbujemy wykonać proste zapytanie testowe (np. pobrać historię USD)
+                try {
+                    const response = await fetch('/nbp/history/USD', {
+                        headers: { 'Authorization': this.authHeader }
+                    });
+
+                    if (response.ok) {
+                        this.isLoggedIn = true;
+                        this.errorMessage = '';
+                    } else {
+                        this.errorMessage = "Błąd logowania. Sprawdź dane.";
+                    }
+                } catch (e) {
+                    this.errorMessage = "Błąd połączenia z serwerem.";
+                }
+            },
+            logout() {
+                this.isLoggedIn = false;
+                this.authHeader = '';
+                this.historyData = [];
+                this.actionMessage = '';
+            },
+            // Uniwersalna metoda do wysyłania zapytań z Autoryzacją
+            async sendRequest(url, method = 'GET', body = null) {
+                const options = {
+                    method: method,
+                    headers: {
+                        'Authorization': this.authHeader,
+                        'Content-Type': 'application/json'
+                    }
+                };
+                if (body) options.body = JSON.stringify(body);
+                return await fetch(url, options);
+            },
+
+            async loadTable(table) {
+                this.actionMessage = "Pobieranie...";
+                const res = await this.sendRequest('/nbp/load/' + table);
+                if (res.ok) {
+                    this.actionMessage = await res.text();
+                } else {
+                    this.actionMessage = "Błąd pobierania tabeli.";
+                }
+            },
+
+            async addAlert() {
+                // Pobierz ID użytkownika (na sztywno 1, lub musielibyśmy dodać endpoint /me)
+                const payload = {
+                    userId: 1, // Zakładamy ID 1 dla Jana Testowego
+                    currencyCode: this.alertForm.currency,
+                    threshold: this.alertForm.threshold
+                };
+
+                const res = await this.sendRequest('/nbp/alert', 'POST', payload);
+                if (res.ok) {
+                    this.actionMessage = await res.text();
+                    this.alertForm.currency = '';
+                    this.alertForm.threshold = null;
+                } else {
+                    this.actionMessage = "Błąd dodawania alertu.";
+                }
+            },
+
+            async fetchHistory() {
+                if(!this.historyCurrency) return;
+                const res = await this.sendRequest('/nbp/history/' + this.historyCurrency.toUpperCase());
+                if (res.ok) {
+                    this.historyData = await res.json();
+                } else {
+                    this.historyData = [];
+                    alert("Nie znaleziono waluty lub brak danych.");
+                }
+            }
+        }
+    }).mount('#app');
+</script>
+
+</body>
+</html>

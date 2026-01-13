@@ -10,11 +10,15 @@ public class AppUser {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-
     private String name;
+
+    @Column(unique = true)
     private String email;
 
-    // Relacja: Użytkownik może mieć wiele alertów
+    private String password;
+
+    private String role;
+
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL)
     private List<UserAlert> alerts;
 }

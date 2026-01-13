@@ -36,6 +36,8 @@ public class NbpService {
         fetchAndSaveRates("A");
     }
 
+    // ... (początek klasy i inne metody bez zmian)
+
     public void fetchAndSaveRates(String tableType) {
         String url = "http://api.nbp.pl/api/exchangerates/tables/" + tableType + "?format=json";
 
@@ -46,20 +48,29 @@ public class NbpService {
                 NbpTableDto table = response[0];
                 LocalDate rateDate = LocalDate.parse(table.effectiveDate);
 
+                Set<String> codes = table.rates.stream()
+                        .map(NbpRateDto::getCode)
+                        .collect(Collectors.toSet());
+
+                Map<String, Currency> existingCurrencies = currencyRepository.findByCodeIn(codes).stream()
+                        .collect(Collectors.toMap(Currency::getCode, c -> c));
+
                 List<Rate> ratesToSave = new ArrayList<>();
 
                 for (NbpRateDto dto : table.rates) {
-                    Currency currency = currencyRepository.findByCode(dto.code)
-                            .orElseGet(() -> {
-                                Currency newC = new Currency();
-                                newC.setCode(dto.code);
-                                newC.setName(dto.currency);
-                                return currencyRepository.save(newC);
-                            });
+                    Currency currency = existingCurrencies.get(dto.getCode());
+
+                    if (currency == null) {
+                        Currency newC = new Currency();
+                        newC.setCode(dto.getCode());
+                        newC.setName(dto.getCurrency());
+                        currency = currencyRepository.save(newC);
+                        existingCurrencies.put(currency.getCode(), currency);
+                    }
 
                     Rate rate = new Rate();
                     rate.setCurrency(currency);
-                    rate.setMid(dto.mid);
+                    rate.setMid(dto.getMid());
                     rate.setDate(rateDate);
 
                     ratesToSave.add(rate);
@@ -92,7 +103,7 @@ public class NbpService {
         Map<String, Double> ratesMap = latestRatesList.stream()
                 .collect(Collectors.toMap(
                         rate -> rate.getCurrency().getCode(),
-                        Rate::getMid
+                        Rate::getMid,(existing, replacement) -> existing
                 ));
 
         log.info("Sprawdzanie {} alertów dla {} walut...", alerts.size(), currenciesInAlerts.size());

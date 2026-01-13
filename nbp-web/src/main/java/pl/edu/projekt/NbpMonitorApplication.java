@@ -5,6 +5,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.client.RestTemplate;
 import pl.edu.projekt.core.entity.AppUser;
 import pl.edu.projekt.core.repository.AppUserRepository;
@@ -22,17 +23,17 @@ public class NbpMonitorApplication {
     }
 
     @Bean
-    public CommandLineRunner createTestUser(AppUserRepository appUserRepository) {
+    public CommandLineRunner createTestUser(AppUserRepository appUserRepository, PasswordEncoder passwordEncoder) {
         return args -> {
             if (appUserRepository.count() == 0) {
                 AppUser user = new AppUser();
                 user.setName("Jan Testowy");
                 user.setEmail("jan@test.pl");
+                user.setPassword(passwordEncoder.encode("user123"));
+                user.setRole("USER");
 
                 appUserRepository.save(user);
-                System.out.println(">>> (FIX) Utworzono użytkownika testowego: " + user.getName());
-            } else {
-                System.out.println(">>> (FIX) Użytkownik testowy już istnieje.");
+                System.out.println(">>> (SECURITY) Utworzono użytkownika: jan@test.pl / hasło: user123");
             }
         };
     }
