@@ -59,6 +59,8 @@ public class NbpService {
                 }
                 saveLog("SUCCESS", "Pobrano dane dla tabeli " + tableType + " z dnia: " + rateDate);
                 System.out.println("Sukces: Pobrano tabelę " + tableType);
+
+                checkAlerts();
             }
         } catch (Exception e) {
             saveLog("ERROR", "Błąd pobierania tabeli " + tableType + ": " + e.getMessage());
@@ -112,5 +114,27 @@ public class NbpService {
 
         userAlertRepository.save(alert);
         System.out.println("Dodano alert dla waluty " + dto.getCurrencyCode() + " powyżej " + dto.getThreshold());
+    }
+
+    private void checkAlerts(){
+        List<UserAlert> alerts = userAlertRepository.findAll();
+
+        if (alerts.isEmpty()) {
+            return;
+        }
+
+        for (UserAlert alert : alerts) {
+            currencyRepository.findByCode(alert.getCurrencyCode()).ifPresent(currency ->{
+                rateRepository.findTopByCurrencyOrderByDateDesc(currency).ifPresent(rate -> {
+                    if (rate.getMid() > alert.getThreshold()) {
+                       System.out.println("ATTENTION!\n Currency " + alert.getCurrencyCode() +
+                               " exceeded threshold of " + alert.getThreshold() +
+                               ". Current rate: " + rate.getMid() +
+                               ". Notify user: " + alert.getUser().getEmail());
+
+                    }
+                });
+            });
+        }
     }
 }
