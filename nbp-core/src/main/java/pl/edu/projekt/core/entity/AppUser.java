@@ -2,10 +2,15 @@ package pl.edu.projekt.core.entity;
 
 import jakarta.persistence.*;
 import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
+
 import java.util.List;
 
 @Entity
 @Data
+@Setter
+@Getter
 public class AppUser {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

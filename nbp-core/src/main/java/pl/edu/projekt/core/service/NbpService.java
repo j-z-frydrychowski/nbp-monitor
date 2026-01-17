@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 import pl.edu.projekt.core.dto.RateHistoryDto;
 import pl.edu.projekt.core.dto.UserAlertDto;
@@ -36,8 +37,7 @@ public class NbpService {
         fetchAndSaveRates("A");
     }
 
-    // ... (początek klasy i inne metody bez zmian)
-
+    @Transactional
     public void fetchAndSaveRates(String tableType) {
         String url = "http://api.nbp.pl/api/exchangerates/tables/" + tableType + "?format=json";
 
